@@ -1,0 +1,67 @@
+apiVersion: kuberbac.prosimcorp.com/v1alpha1
+kind: DynamicClusterRole
+metadata:
+  name: example-policy
+spec:
+  # Synchronization parameters
+  synchronization:
+    time: "30s"
+
+  # Desired name for produced ClusterRole
+  target:
+    name: example-policy
+
+  # This is where the allowed policies are expressed
+  # Ref: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+  allow:
+    # Allow everything to remove permissions or resources later
+    # Of course, you can be much more specific. This is just an example
+    - apiGroups: [ "*" ]
+      resources: [ "*" ]
+      verbs: [ "*" ]
+
+  # This is where the denied policies are expressed
+  # Ref: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+  deny:
+    # Deny access to resources related to this wonderful RBAC
+    # You can use typical wildcards. They will be expanded by Kuberbac
+    - apiGroups:
+        - "*"
+      resources:
+        - "dynamicclusterroles"
+        - "dynamicrolebindings"
+      verbs:
+        - "*"
+
+    # Deny access to resources related to core RBAC
+    - apiGroups:
+        - "*"
+      resources:
+        - "clusterroles"
+        - "clusterrolebindings"
+        - "serviceaccounts"
+      verbs:
+        - "*"
+
+    # Deny access to secrets
+    - apiGroups: [ "*" ]
+      resources: [ "secrets" ]
+      verbs: [ "*" ]
+
+    # Deny access to the cluster's CA
+    - apiGroups: [ "*" ]
+      resources: [ "configmaps" ]
+      verbs: [ "*" ]
+      resourceNames: [ "kube-root-ca.crt"]
+
+    # Avoid users deleting some resources
+    # You can specify verbs, or even names!
+    - apiGroups: [ "*" ]
+      resources: [ "configmaps" ]
+      verbs: [ "delete" ]
+      resourceNames: 
+      - "kubeadm-config"
+      - "kube-proxy"
+      - "kubelet-config"
+      - "coredns"
+      - "cluster-info"

@@ -1,0 +1,23 @@
+# permissions for end users to view dynamicrolebindings.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: kuberbac
+    app.kubernetes.io/managed-by: kustomize
+  name: dynamicrolebinding-viewer-role
+rules:
+- apiGroups:
+  - kuberbac.prosimcorp.com
+  resources:
+  - dynamicrolebindings
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - kuberbac.prosimcorp.com
+  resources:
+  - dynamicrolebindings/status
+  verbs:
+  - get

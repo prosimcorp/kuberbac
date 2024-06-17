@@ -1,0 +1,105 @@
+apiVersion: kuberbac.prosimcorp.com/v1alpha1
+kind: DynamicRoleBinding
+metadata:
+  name: example-role-binding
+spec:
+
+  synchronization:
+      time: "10s"
+
+  # This is the section to enrol members to your existing role
+  source:
+    clusterRole: example-policy
+
+    subject:
+      # Members can be of type User. These members only exists outside your cluster
+      # so they can be ONLY matched by exact names
+
+      # apiGroup: rbac.authorization.k8s.io
+      # kind: User
+      # nameSelector:
+      #   matchList:
+      #     - Famara
+      #     - Yeray
+      #     - Chaxiraxi
+      #     - Beneharo
+      #     - Itahisa
+
+
+      # Members can be of type Group. This case is exact same as User members.
+      # This is typically used on cloud providers, when their external IAM members are granted on Kubernetes.
+      # They can be ONLY matched by exact names
+
+      #apiGroup: rbac.authorization.k8s.io
+      #kind: Group
+      #nameSelector:
+      #  matchList:
+      #    - managers@company.com
+      #    - upper-managers@company.com
+
+
+      # ServiceAccount resources actually exists inside Kubernetes, so the operator can look for them.
+      # Kuberbac will look for them by name and namespace, both at once, so you need to fill both selectors. 
+      apiGroup: ""
+      kind: ServiceAccount
+
+      # ServiceAccount names can be matched by exact name, or a Golang regular expression. 
+      # Attention: Only one can be performed.
+      nameSelector:
+
+        # Select by matching exact names
+        matchList:
+          - default
+
+        # Select by matching names using a regular expression.
+        # As Golang does not support negative lookahead on regex, there is a special parameter 
+        # called 'negative' to select the opossite names than expressed by the expression
+
+        # matchRegex: 
+        #   negative: false
+        #   expression: "^(.*)$"
+
+      # To look for a ServiceAccount, namespaces can be matched by exact name, 
+      # by their labels, or a Golang regular expression. 
+      # Attention: Only one can be performed.
+      namespaceSelector:
+
+        # Select namespaces by matching exact names
+        matchList:
+          - kube-system
+          - kube-public
+          - default
+
+        # Select those ServiceAccounts in namespaces containing some labels
+        # matchLabels:
+        #   managed-by: hashicorp-vault
+
+        # Select those ServiceAccounts in namespaces different from: kube-system, kube-public or default
+        # matchRegex:
+        #   negative: true
+        #   expression: "^(default|kube-system|kube-public)$"
+
+
+  # This is the section to define the target namespaces where the role-bindings will be created
+  # For those members selected in the previous section
+  targets:
+
+    # Target namespaces can be matched by exact name, 
+    # by their labels, or a Golang regular expression. 
+    # Attention: Only one can be performed.
+    namespaceSelector:
+
+      # Select namespaces by matching exact names
+      matchList:
+        - kube-system
+        - kube-public
+        - default
+
+      # Select those ServiceAccounts in namespaces containing some labels
+      # matchLabels:
+      #   managed-by: hashicorp-vault
+
+      # Select those ServiceAccounts in namespaces different from: kube-system, kube-public or default
+      # matchRegex:
+      #   negative: true
+      #   expression: "^(default|kube-system|kube-public)$"

@@ -1,0 +1,5 @@
+## Append samples of your project ##
+resources:
+- kuberbac_v1alpha1_dynamicclusterrole.yaml
+- kuberbac_v1alpha1_dynamicrolebinding.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

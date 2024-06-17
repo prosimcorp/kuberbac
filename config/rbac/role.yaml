@@ -1,0 +1,103 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - '*'
+  resources:
+  - '*'
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - kuberbac.prosimcorp.com
+  resources:
+  - dynamicclusterroles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kuberbac.prosimcorp.com
+  resources:
+  - dynamicclusterroles/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kuberbac.prosimcorp.com
+  resources:
+  - dynamicclusterroles/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - kuberbac.prosimcorp.com
+  resources:
+  - dynamicrolebindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kuberbac.prosimcorp.com
+  resources:
+  - dynamicrolebindings/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kuberbac.prosimcorp.com
+  resources:
+  - dynamicrolebindings/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterroles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
