@@ -289,8 +289,9 @@ spec:
 ## How to develop
 
 ### Prerequisites
-- go version v1.22.0+
-- docker version 17.03+.
+- Kubebuilder v4.0.0+
+- Go version v1.22.0+
+- Docker version 17.03+.
 - kubectl version v1.11.3+.
 - Access to a Kubernetes v1.11.3+ cluster.
 
