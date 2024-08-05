@@ -45,7 +45,7 @@ type DynamicClusterRoleReconciler struct {
 // +kubebuilder:rbac:groups=kuberbac.prosimcorp.com,resources=dynamicclusterroles,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=kuberbac.prosimcorp.com,resources=dynamicclusterroles/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=kuberbac.prosimcorp.com,resources=dynamicclusterroles/finalizers,verbs=update
-// +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=clusterroles,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=clusterroles,verbs=get;list;watch;create;update;patch;delete;bind;escalate
 // +kubebuilder:rbac:groups="*",resources="*",verbs=get;list
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to

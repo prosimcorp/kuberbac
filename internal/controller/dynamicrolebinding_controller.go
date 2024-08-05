@@ -45,7 +45,7 @@ type DynamicRoleBindingReconciler struct {
 // +kubebuilder:rbac:groups=kuberbac.prosimcorp.com,resources=dynamicrolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=kuberbac.prosimcorp.com,resources=dynamicrolebindings/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=kuberbac.prosimcorp.com,resources=dynamicrolebindings/finalizers,verbs=update
-// +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;update;patch;delete;bind;escalate
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list
 
