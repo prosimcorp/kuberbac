@@ -52,6 +52,14 @@ spec:
                         type: string
                       kind:
                         type: string
+                      metaSelector:
+                        description: TODO
+                        properties:
+                          matchLabels:
+                            additionalProperties:
+                              type: string
+                            type: object
+                        type: object
                       nameSelector:
                         description: TODO
                         properties:
@@ -65,8 +73,6 @@ spec:
                                 type: string
                               negative:
                                 type: boolean
-                            required:
-                            - expression
                             type: object
                         type: object
                       namespaceSelector:
@@ -86,14 +92,11 @@ spec:
                                 type: string
                               negative:
                                 type: boolean
-                            required:
-                            - expression
                             type: object
                         type: object
                     required:
                     - apiGroup
                     - kind
-                    - nameSelector
                     type: object
                 required:
                 - clusterRole
@@ -110,6 +113,16 @@ spec:
               targets:
                 description: TODO
                 properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  labels:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  name:
+                    type: string
                   namespaceSelector:
                     description: TODO
                     properties:
@@ -127,12 +140,10 @@ spec:
                             type: string
                           negative:
                             type: boolean
-                        required:
-                        - expression
                         type: object
                     type: object
                 required:
-                - namespaceSelector
+                - name
                 type: object
             required:
             - source

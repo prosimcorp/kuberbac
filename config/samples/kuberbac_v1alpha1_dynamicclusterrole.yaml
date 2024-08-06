@@ -10,6 +10,8 @@ spec:
   # Desired name for produced ClusterRole
   target:
     name: example-policy
+    annotations: {}
+    labels: {}
 
   # This is where the allowed policies are expressed
   # Ref: https://kubernetes.io/docs/reference/access-authn-authz/rbac/

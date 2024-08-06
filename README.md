@@ -109,6 +109,8 @@ spec:
   # Desired name for produced ClusterRole
   target:
     name: example-policy
+    annotations: {}
+    labels: {}
 
   # This is where the allowed policies are expressed
   # Ref: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
@@ -223,7 +225,18 @@ spec:
       apiGroup: ""
       kind: ServiceAccount
 
+      # (Optional)
+      # ServiceAccounts can be selected by some metadata
+      # This field is mutually exclusive with 'nameSelector'
+      metaSelector:
+        
+        # Select by matching labels
+        matchLabels:
+          managed-by: custom-operator
+
+      # (Optional)
       # ServiceAccount names can be matched by exact name, or a Golang regular expression. 
+      # This field is mutually exclusive with 'metaSelector'
       # Attention: Only one can be performed.
       nameSelector:
 
@@ -239,6 +252,7 @@ spec:
         #   negative: false
         #   expression: "^(.*)$"
 
+      # (Optional)
       # To look for a ServiceAccount, namespaces can be matched by exact name, 
       # by their labels, or a Golang regular expression. 
       # Attention: Only one can be performed.
@@ -264,6 +278,15 @@ spec:
   # For those members selected in the previous section
   targets:
 
+    # (Required) 
+    # Name of the RoleBinding objects to be created
+    name: example-policy
+
+    # Add some metadata to the RoleBinding objects
+    annotations: {}
+    labels: {}
+
+    # (Optional)
     # Target namespaces can be matched by exact name, 
     # by their labels, or a Golang regular expression. 
     # Attention: Only one can be performed.

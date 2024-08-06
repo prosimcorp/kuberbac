@@ -22,7 +22,12 @@ import (
 
 type MatchRegexT struct {
 	Negative   bool   `json:"negative,omitempty"`
-	Expression string `json:"expression"`
+	Expression string `json:"expression,omitempty"`
+}
+
+// TODO
+type MetaSelectorT struct {
+	MatchLabels map[string]string `json:"matchLabels,omitempty"`
 }
 
 // TODO
@@ -43,7 +48,8 @@ type DynamicRoleBindingSourceSubject struct {
 	ApiGroup string `json:"apiGroup"`
 	Kind     string `json:"kind"`
 
-	NameSelector      NameSelectorT      `json:"nameSelector"`
+	MetaSelector      MetaSelectorT      `json:"metaSelector,omitempty"`
+	NameSelector      NameSelectorT      `json:"nameSelector,omitempty"`
 	NamespaceSelector NamespaceSelectorT `json:"namespaceSelector,omitempty"`
 }
 
@@ -56,7 +62,11 @@ type DynamicRoleBindingSource struct {
 
 // TODO
 type DynamicRoleBindingTargets struct {
-	NamespaceSelector NamespaceSelectorT `json:"namespaceSelector"`
+	Name        string            `json:"name"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+	Labels      map[string]string `json:"labels,omitempty"`
+
+	NamespaceSelector NamespaceSelectorT `json:"namespaceSelector,omitempty"`
 }
 
 // DynamicRoleBindingSpec defines the desired state of DynamicRoleBinding

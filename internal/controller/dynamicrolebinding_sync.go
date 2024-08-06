@@ -68,6 +68,15 @@ func (r *DynamicRoleBindingReconciler) CheckNamespaceSelector(ctx context.Contex
 // FilterNamespaceListBySelector returns a list of namespaces that match a namespaceSelector field
 func (r *DynamicRoleBindingReconciler) FilterNamespaceListBySelector(ctx context.Context, namespaceList *corev1.NamespaceList, namespaceSelector *kuberbacv1alpha1.NamespaceSelectorT) (namespaces []string, err error) {
 
+	// Return all namespaces if namespaceSelector is empty
+	if reflect.ValueOf(*namespaceSelector).IsZero() {
+		for _, namespace := range namespaceList.Items {
+			namespaces = append(namespaces, namespace.Name)
+		}
+
+		return namespaces, err
+	}
+
 	// Check just only field is filled
 	err = r.CheckNamespaceSelector(ctx, namespaceSelector)
 	if err != nil {
@@ -123,7 +132,7 @@ func (r *DynamicRoleBindingReconciler) FilterNamespaceListBySelector(ctx context
 }
 
 // GetServiceAccountsBySelectors TODO
-func (r *DynamicRoleBindingReconciler) GetServiceAccountsBySelectors(ctx context.Context, filteredNamespaceList []string, nameSelector *kuberbacv1alpha1.NameSelectorT, namespaceSelector *kuberbacv1alpha1.NamespaceSelectorT) (result *corev1.ServiceAccountList, err error) {
+func (r *DynamicRoleBindingReconciler) GetServiceAccountsBySelectors(ctx context.Context, filteredNamespaceList []string, subject *kuberbacv1alpha1.DynamicRoleBindingSourceSubject) (result *corev1.ServiceAccountList, err error) {
 
 	result = &corev1.ServiceAccountList{}
 
@@ -133,10 +142,23 @@ func (r *DynamicRoleBindingReconciler) GetServiceAccountsBySelectors(ctx context
 		return result, err
 	}
 
-	//
+	// Check nameSelector and labelSelector are NOT filled together
+	if !reflect.ValueOf(subject.NameSelector).IsZero() && !reflect.ValueOf(subject.MetaSelector).IsZero() {
+		err = fmt.Errorf("nameSelector and labelSelector are mutually exclusive")
+		return result, err
+	}
+
+	// Check just only nameSelector is used at once when filled
+	if !reflect.ValueOf(subject.NameSelector).IsZero() {
+		if err = r.CheckNameSelector(ctx, &subject.NameSelector); err != nil {
+			return result, err
+		}
+	}
+
+	// Compile regex expression when filled
 	matchRegex := &regexp.Regexp{}
-	if nameSelector.MatchRegex.Expression != "" {
-		matchRegex, err = regexp.Compile(nameSelector.MatchRegex.Expression)
+	if subject.NameSelector.MatchRegex.Expression != "" {
+		matchRegex, err = regexp.Compile(subject.NameSelector.MatchRegex.Expression)
 		if err != nil {
 			return result, err
 		}
@@ -146,13 +168,21 @@ func (r *DynamicRoleBindingReconciler) GetServiceAccountsBySelectors(ctx context
 	for _, serviceAccount := range tmpServiceAccountList.Items {
 
 		// Ignore namespaces not present in desired list
-		if !slices.Contains(filteredNamespaceList, serviceAccount.Namespace) {
+		if len(filteredNamespaceList) != 0 && !slices.Contains(filteredNamespaceList, serviceAccount.Namespace) {
 			continue
 		}
 
-		// Matching by fixed list is preferred
-		if len(nameSelector.MatchList) > 0 {
-			if slices.Contains(nameSelector.MatchList, serviceAccount.Name) {
+		// Matching by labels is preferred
+		if !reflect.ValueOf(subject.MetaSelector.MatchLabels).IsZero() {
+			if globals.IsSubset(subject.MetaSelector.MatchLabels, serviceAccount.Labels) {
+				result.Items = append(result.Items, serviceAccount)
+			}
+			continue
+		}
+
+		// Matching by fixed list
+		if len(subject.NameSelector.MatchList) > 0 {
+			if slices.Contains(subject.NameSelector.MatchList, serviceAccount.Name) {
 				result.Items = append(result.Items, serviceAccount)
 			}
 			continue
@@ -161,12 +191,12 @@ func (r *DynamicRoleBindingReconciler) GetServiceAccountsBySelectors(ctx context
 		// Match by regex
 		nameMatched := matchRegex.MatchString(serviceAccount.Name)
 
-		if !nameMatched && nameSelector.MatchRegex.Negative {
+		if !nameMatched && subject.NameSelector.MatchRegex.Negative {
 			result.Items = append(result.Items, serviceAccount)
 			continue
 		}
 
-		if nameMatched && !nameSelector.MatchRegex.Negative {
+		if nameMatched && !subject.NameSelector.MatchRegex.Negative {
 			result.Items = append(result.Items, serviceAccount)
 		}
 
@@ -185,26 +215,12 @@ func (r *DynamicRoleBindingReconciler) SyncTarget(ctx context.Context, resource 
 		return err
 	}
 
-	// Enforce source.nameSelector has only one type of selector filled
-	err = r.CheckNameSelector(ctx, &resource.Spec.Source.Subject.NameSelector)
-	if err != nil {
-		err = fmt.Errorf("source.subject.nameSelector is invalid: %s", err.Error())
-		return err
-	}
-
 	// Check namespaceSelector does NOT exist for subjects other than ServiceAccount
 	if slices.Contains([]string{"Group", "User"}, resource.Spec.Source.Subject.Kind) &&
-		!reflect.ValueOf(resource.Spec.Source.Subject.NamespaceSelector).IsZero() {
+		(!reflect.ValueOf(resource.Spec.Source.Subject.NamespaceSelector).IsZero() ||
+			!reflect.ValueOf(resource.Spec.Source.Subject.MetaSelector).IsZero()) {
 
-		err = fmt.Errorf("namespaceSelector is not allowed for subjects other than ServiceAccount")
-		return err
-	}
-
-	// Enforce namespaceSelector for ServiceAccount subjects
-	if resource.Spec.Source.Subject.Kind == "ServiceAccount" &&
-		reflect.ValueOf(resource.Spec.Source.Subject.NamespaceSelector).IsZero() {
-
-		err = fmt.Errorf("namespaceSelector is required for ServiceAccount subjects")
+		err = fmt.Errorf("namespaceSelector and labelSelector are only allowed for ServiceAccount subjects")
 		return err
 	}
 
@@ -216,10 +232,11 @@ func (r *DynamicRoleBindingReconciler) SyncTarget(ctx context.Context, resource 
 	}
 
 	//
-	sourceFilteredNamespaces, err := r.FilterNamespaceListBySelector(ctx, namespaceList, &resource.Spec.Source.Subject.NamespaceSelector)
+	subjectFilteredNamespaces, err := r.FilterNamespaceListBySelector(ctx, namespaceList, &resource.Spec.Source.Subject.NamespaceSelector)
 	if err != nil {
 		return err
 	}
+
 	targetFilteredNamespaces, err := r.FilterNamespaceListBySelector(ctx, namespaceList, &resource.Spec.Targets.NamespaceSelector)
 	if err != nil {
 		return err
@@ -232,8 +249,15 @@ func (r *DynamicRoleBindingReconciler) SyncTarget(ctx context.Context, resource 
 	if slices.Contains([]string{"Group", "User"}, resource.Spec.Source.Subject.Kind) {
 
 		// MatchRegex nameSelector is not allowed for these subjects
+		// TODO: Stop or not the process flow?????
 		if !reflect.ValueOf(resource.Spec.Source.Subject.NameSelector.MatchRegex).IsZero() {
 			err = fmt.Errorf("MatchRegex nameSelector is not allowed for subjects: Group, User")
+			return err
+		}
+
+		// MatchList nameSelector is required for these subjects
+		if reflect.ValueOf(resource.Spec.Source.Subject.NameSelector.MatchList).IsZero() {
+			err = fmt.Errorf("MatchList nameSelector is required for subjects: Group, User")
 			return err
 		}
 
@@ -250,8 +274,7 @@ func (r *DynamicRoleBindingReconciler) SyncTarget(ctx context.Context, resource 
 	// Expand ServiceAccount subjects
 	if resource.Spec.Source.Subject.Kind == "ServiceAccount" {
 
-		serviceAccounts, err := r.GetServiceAccountsBySelectors(ctx, sourceFilteredNamespaces,
-			&resource.Spec.Source.Subject.NameSelector, &resource.Spec.Source.Subject.NamespaceSelector)
+		serviceAccounts, err := r.GetServiceAccountsBySelectors(ctx, subjectFilteredNamespaces, &resource.Spec.Source.Subject)
 		if err != nil {
 			err = fmt.Errorf("error getting selected ServiceAccounts: %s", err.Error())
 			return err
@@ -275,15 +298,16 @@ func (r *DynamicRoleBindingReconciler) SyncTarget(ctx context.Context, resource 
 		"kuberbac.prosimcorp.com/owner-namespace":  resource.ObjectMeta.Namespace,
 	}
 
-	if len(resource.ObjectMeta.Annotations) == 0 {
-		resource.ObjectMeta.Labels = map[string]string{}
+	if len(resource.Spec.Targets.Annotations) == 0 {
+		resource.Spec.Targets.Annotations = map[string]string{}
 	}
-	maps.Copy(resource.ObjectMeta.Annotations, referenceAnnotations)
+	maps.Copy(resource.Spec.Targets.Annotations, referenceAnnotations)
 
 	roleBindingResource := rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        resource.ObjectMeta.Name,
-			Annotations: resource.ObjectMeta.Annotations,
+			Name:        resource.Spec.Targets.Name,
+			Labels:      resource.Spec.Targets.Labels,
+			Annotations: resource.Spec.Targets.Annotations,
 		},
 		RoleRef: rbacv1.RoleRef{
 			APIGroup: "rbac.authorization.k8s.io",
@@ -293,20 +317,40 @@ func (r *DynamicRoleBindingReconciler) SyncTarget(ctx context.Context, resource 
 		Subjects: expandedSubjects,
 	}
 
-	// Create the RoleBinding resource on targeted namespaces
-	for _, namespace := range targetFilteredNamespaces {
-		roleBindingResource.SetNamespace(namespace)
-		err = r.Client.Update(ctx, roleBindingResource.DeepCopy())
-		if err != nil {
-			log.Printf("error updating RoleBinding: %s", err.Error())
-		}
-	}
-
 	// Get Rolebindings
 	existentRoleBindingList := rbacv1.RoleBindingList{}
 	err = r.Client.List(ctx, &existentRoleBindingList)
 	if err != nil {
 		return err
+	}
+
+	// Create the RoleBinding resource on targeted namespaces
+	for _, namespace := range targetFilteredNamespaces {
+		roleBindingResource.SetNamespace(namespace)
+
+		// Check potential already existing RoleBindings that match the same name and namespace
+		roleBindingFound := false
+		for _, roleBinding := range existentRoleBindingList.Items {
+
+			if roleBinding.Namespace != namespace || roleBinding.Name != roleBindingResource.Name {
+				continue
+			}
+
+			if !globals.IsSubset(roleBindingResource.Annotations, roleBinding.Annotations) {
+				roleBindingFound = true
+				break
+			}
+		}
+
+		if roleBindingFound {
+			continue
+		}
+
+		// Finally, update it!!
+		err = r.Client.Update(ctx, roleBindingResource.DeepCopy())
+		if err != nil {
+			log.Printf("error updating RoleBinding: %s", err.Error())
+		}
 	}
 
 	// For cleaning potential previous abandoned resources, get the list of namespaces
