@@ -608,10 +608,21 @@ func (r *DynamicClusterRoleReconciler) SyncTarget(ctx context.Context, resource 
 	// We assume always only one ClusterRole, but this will be transformed into two when asked to separate scopes.
 	clusterRoles := []rbacv1.ClusterRole{}
 
+	referenceAnnotations := map[string]string{
+		"kuberbac.prosimcorp.com/owner-apiversion": resource.APIVersion,
+		"kuberbac.prosimcorp.com/owner-kind":       resource.Kind,
+		"kuberbac.prosimcorp.com/owner-name":       resource.ObjectMeta.Name,
+		"kuberbac.prosimcorp.com/owner-namespace":  resource.ObjectMeta.Namespace,
+	}
+
+	if len(resource.Spec.Target.Annotations) == 0 {
+		resource.Spec.Target.Annotations = map[string]string{}
+	}
+
 	clusterRoleResource := rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        resource.Spec.Target.Name,
-			Annotations: resource.Spec.Target.Annotations,
+			Annotations: referenceAnnotations,
 			Labels:      resource.Spec.Target.Labels,
 		},
 		Rules: maps.Values(result),
