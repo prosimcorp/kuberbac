@@ -23,9 +23,12 @@ import (
 
 // TargetT defines the spec of the target section of a DynamicClusterRole
 type TargetT struct {
-	Name        string            `json:"name"`
+	Name string `json:"name"`
+
 	Annotations map[string]string `json:"annotations,omitempty"`
 	Labels      map[string]string `json:"labels,omitempty"`
+
+	SeparateScopes bool `json:"separateScopes,omitempty"`
 }
 
 // DynamicClusterRoleSpec defines the desired state of DynamicClusterRole
