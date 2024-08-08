@@ -35,7 +35,7 @@ func (r *DynamicRoleBindingReconciler) CheckMetaSelector(ctx context.Context, me
 	}
 
 	if filledSelectorFields != 1 {
-		err = fmt.Errorf("only one of the following fields is allowed as nameSelector: matchList, matchRegex")
+		err = fmt.Errorf("only one of the following fields is allowed as metaSelector: matchLabels, matchAnnotations")
 	}
 
 	return err
