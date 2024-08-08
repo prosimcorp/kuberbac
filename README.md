@@ -112,6 +112,10 @@ spec:
     annotations: {}
     labels: {}
 
+    # This flag create two separated ClusterRoles: 
+    # one for cluster-wide resources and another for namespace-scoped resources
+    separateScopes: false
+
   # This is where the allowed policies are expressed
   # Ref: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
   allow:
