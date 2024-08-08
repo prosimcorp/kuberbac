@@ -170,14 +170,14 @@ func (r *DynamicRoleBindingReconciler) GetServiceAccountsBySelectors(ctx context
 		return result, err
 	}
 
-	// Check just only nameSelector is used at once when filled
+	// Check only one metaSelector is used at once when filled
 	if !reflect.ValueOf(subject.MetaSelector).IsZero() {
 		if err = r.CheckMetaSelector(ctx, &subject.MetaSelector); err != nil {
 			return result, err
 		}
 	}
 
-	// Check just only nameSelector is used at once when filled
+	// Check only one nameSelector is used at once when filled
 	if !reflect.ValueOf(subject.NameSelector).IsZero() {
 		if err = r.CheckNameSelector(ctx, &subject.NameSelector); err != nil {
 			return result, err
