@@ -27,6 +27,10 @@ type GVKR struct {
 	GVK         schema.GroupVersionKind
 	Resource    string
 	Subresource string
+
+	//
+	Namespaced  bool
+	UsableVerbs []string // Intended for future use polishing resulting verbs
 }
 
 // PolicyRulesProcessorT represents the things done
@@ -102,6 +106,8 @@ func (p *PolicyRulesProcessorT) SetResourcesByGroup() (err error) {
 					Version: version,
 					Kind:    apiResource.Kind,
 				},
+				Namespaced:  apiResource.Namespaced,
+				UsableVerbs: apiResource.Verbs,
 			})
 		}
 	}
@@ -520,6 +526,39 @@ func (p *PolicyRulesProcessorT) EvaluatePolicyRules(allowMap, denyMap map[string
 	return result, err
 }
 
+// SplitPolicyRules separates PolicyRules into two lists: clusterScopedRules and namespaceScopedRules
+func (p *PolicyRulesProcessorT) SplitPolicyRules(policyRules []rbacv1.PolicyRule) (clusterScopedRules, namespaceScopedRules []rbacv1.PolicyRule) {
+
+	for _, policyRule := range policyRules {
+
+		// Look for current PolicyRule in the resourcesByGroup map
+		for _, resource := range p.ResourcesByGroup[policyRule.APIGroups[0]] {
+
+			//
+			resourceName := resource.Resource
+			if resource.Subresource != "" {
+				resourceName += "/" + resource.Subresource
+			}
+
+			// Ignore when it is not the correct resource
+			if policyRule.Resources[0] != resourceName {
+				continue
+			}
+
+			// Add to the corresponding list
+			if resource.Namespaced {
+				namespaceScopedRules = append(namespaceScopedRules, policyRule)
+			} else {
+				clusterScopedRules = append(clusterScopedRules, policyRule)
+			}
+
+			break
+		}
+	}
+
+	return clusterScopedRules, namespaceScopedRules
+}
+
 // GetSyncTime return the spec.synchronization.time as duration, or default time on failures
 func (r *DynamicClusterRoleReconciler) GetSyncTime(resource *kuberbacv1alpha1.DynamicClusterRole) (syncTime time.Duration, err error) {
 
@@ -540,15 +579,16 @@ func (r *DynamicClusterRoleReconciler) SyncTarget(ctx context.Context, resource 
 		return fmt.Errorf("error generating PolicyRulesProcessor: %s", err.Error())
 	}
 
-	// Convert '*'
+	// Transform '*' symbols with actual things
 	expandedAllowList := policyRulesProcessor.ExpandPolicyRules(resource.Spec.Allow)
 	expandedDenyList := policyRulesProcessor.ExpandPolicyRules(resource.Spec.Deny)
 
-	//
+	// Stretch policy rules to a single resource per item
 	stretchAllowList := policyRulesProcessor.StretchPolicyRules(expandedAllowList)
 	stretchDenyList := policyRulesProcessor.StretchPolicyRules(expandedDenyList)
 
-	//
+	// Craft a map with stretched policy rules. Its keys are created as unique identifiers.
+	// This is done to increase performance when evaluating the rules.
 	allowMap := policyRulesProcessor.GetMapFromStretchedPolicyRules(stretchAllowList)
 	denyMap := policyRulesProcessor.GetMapFromStretchedPolicyRules(stretchDenyList)
 
@@ -564,19 +604,53 @@ func (r *DynamicClusterRoleReconciler) SyncTarget(ctx context.Context, resource 
 		return fmt.Errorf("error evaluating allow and deny maps: %s", err.Error())
 	}
 
+	// Create a list of ClusterRoles to be created.
+	// We assume always only one ClusterRole, but this will be transformed into two when asked to separate scopes.
+	clusterRoles := []rbacv1.ClusterRole{}
+
+	referenceAnnotations := map[string]string{
+		"kuberbac.prosimcorp.com/owner-apiversion": resource.APIVersion,
+		"kuberbac.prosimcorp.com/owner-kind":       resource.Kind,
+		"kuberbac.prosimcorp.com/owner-name":       resource.ObjectMeta.Name,
+		"kuberbac.prosimcorp.com/owner-namespace":  resource.ObjectMeta.Namespace,
+	}
+
+	if len(resource.Spec.Target.Annotations) == 0 {
+		resource.Spec.Target.Annotations = map[string]string{}
+	}
+
 	clusterRoleResource := rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        resource.Spec.Target.Name,
-			Annotations: resource.Spec.Target.Annotations,
+			Annotations: referenceAnnotations,
 			Labels:      resource.Spec.Target.Labels,
 		},
 		Rules: maps.Values(result),
 		// TODO: Implement AggregationRules later
 	}
+	clusterRoles = append(clusterRoles, clusterRoleResource)
 
-	err = r.Client.Update(ctx, &clusterRoleResource)
-	if err != nil {
-		err = fmt.Errorf("error updating ClusterRole: %s", err.Error())
+	//
+	if resource.Spec.Target.SeparateScopes {
+		clusterScopedRules, namespaceScopedRules := policyRulesProcessor.SplitPolicyRules(maps.Values(result))
+
+		// Assume first ClusterRole as clusterScoped
+		clusterRoles[0].Rules = clusterScopedRules
+		clusterRoles[0].Name = resource.Spec.Target.Name + "-cluster"
+
+		// Create a new ClusterRole for namespaceScoped
+		clusterRoles = append(clusterRoles, *clusterRoleResource.DeepCopy())
+		clusterRoles[1].Rules = namespaceScopedRules
+		clusterRoles[1].Name = resource.Spec.Target.Name + "-namespace"
+	}
+
+	//
+	for _, clusterRole := range clusterRoles {
+		err = r.Client.Update(ctx, &clusterRole)
+		if err != nil {
+			err = fmt.Errorf("error updating ClusterRole: %s", err.Error())
+			break
+		}
 	}
 
 	return err

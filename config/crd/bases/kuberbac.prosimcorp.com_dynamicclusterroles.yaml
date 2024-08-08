@@ -159,6 +159,8 @@ spec:
                     type: object
                   name:
                     type: string
+                  separateScopes:
+                    type: boolean
                 required:
                 - name
                 type: object
