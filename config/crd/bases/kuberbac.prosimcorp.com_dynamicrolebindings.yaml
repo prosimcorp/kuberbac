@@ -55,6 +55,10 @@ spec:
                       metaSelector:
                         description: TODO
                         properties:
+                          matchAnnotations:
+                            additionalProperties:
+                              type: string
+                            type: object
                           matchLabels:
                             additionalProperties:
                               type: string
@@ -117,6 +121,8 @@ spec:
                     additionalProperties:
                       type: string
                     type: object
+                  clusterScoped:
+                    type: boolean
                   labels:
                     additionalProperties:
                       type: string

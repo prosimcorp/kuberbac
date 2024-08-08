@@ -46,11 +46,16 @@ spec:
       # (Optional)
       # ServiceAccounts can be selected by some metadata
       # This field is mutually exclusive with 'nameSelector'
+      # Attention: Only one can be performed.
       metaSelector:
         
         # Select by matching labels
         matchLabels:
           managed-by: custom-operator
+
+        # Select by matching annotations
+        # matchAnnotations:
+        #   managed-by: custom-operator
 
       # (Optional)
       # ServiceAccount names can be matched by exact name, or a Golang regular expression. 
@@ -104,6 +109,9 @@ spec:
     annotations: {}
     labels: {}
 
+    # This flag create a ClusterRoleBinding object instead of RoleBindings 
+    clusterScoped: true
+
     # (Optional)
     # Target namespaces can be matched by exact name, 
     # by their labels, or a Golang regular expression. 
@@ -124,3 +132,4 @@ spec:
       # matchRegex:
       #   negative: true
       #   expression: "^(default|kube-system|kube-public)$"
+  

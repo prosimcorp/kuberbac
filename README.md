@@ -25,10 +25,10 @@ This mechanism is easy to use and works well in general, but it has several issu
    This causes potential drifts between desired and actual state.
 
 
-2. **There is no easy way to give a subject permissions on namespaces dynamically**: a cluster operator can
-   grant a subject permissions either the whole cluster or just into a single namespace with ease. 
+2. **There is no easy way to give a subject permissions on namespaces (or the cluster) dynamically**: a cluster 
+   operator can grant a subject permissions either the whole cluster or just into a single namespace with ease. 
   
-   It can grant permissions on several namespaces, but only by creating several bindings, one for each of them.
+   Yes, it can grant permissions on several namespaces, but only by creating several bindings manually, one for each of them.
 
 
 It would be natural to think that this issues can be managed with some scripts into a pipeline, may be a bit of Helm, etc.
@@ -232,11 +232,16 @@ spec:
       # (Optional)
       # ServiceAccounts can be selected by some metadata
       # This field is mutually exclusive with 'nameSelector'
+      # Attention: Only one can be performed.
       metaSelector:
         
         # Select by matching labels
         matchLabels:
           managed-by: custom-operator
+
+        # Select by matching annotations
+        # matchAnnotations:
+        #   managed-by: custom-operator
 
       # (Optional)
       # ServiceAccount names can be matched by exact name, or a Golang regular expression. 
@@ -290,6 +295,9 @@ spec:
     annotations: {}
     labels: {}
 
+    # This flag create a ClusterRoleBinding object instead of RoleBindings 
+    clusterScoped: true
+
     # (Optional)
     # Target namespaces can be matched by exact name, 
     # by their labels, or a Golang regular expression. 
@@ -310,6 +318,7 @@ spec:
       # matchRegex:
       #   negative: true
       #   expression: "^(default|kube-system|kube-public)$"
+  
 ```
 
 
