@@ -27,7 +27,8 @@ type MatchRegexT struct {
 
 // TODO
 type MetaSelectorT struct {
-	MatchLabels map[string]string `json:"matchLabels,omitempty"`
+	MatchLabels      map[string]string `json:"matchLabels,omitempty"`
+	MatchAnnotations map[string]string `json:"matchAnnotations,omitempty"`
 }
 
 // TODO
@@ -62,9 +63,10 @@ type DynamicRoleBindingSource struct {
 
 // TODO
 type DynamicRoleBindingTargets struct {
-	Name        string            `json:"name"`
-	Annotations map[string]string `json:"annotations,omitempty"`
-	Labels      map[string]string `json:"labels,omitempty"`
+	Name          string            `json:"name"`
+	Annotations   map[string]string `json:"annotations,omitempty"`
+	Labels        map[string]string `json:"labels,omitempty"`
+	ClusterScoped bool              `json:"clusterScoped,omitempty"`
 
 	NamespaceSelector NamespaceSelectorT `json:"namespaceSelector,omitempty"`
 }

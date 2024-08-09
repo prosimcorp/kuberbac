@@ -12,12 +12,34 @@ import (
 	"golang.org/x/exp/maps"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	kuberbacv1alpha1 "prosimcorp.com/kuberbac/api/v1alpha1"
 	"prosimcorp.com/kuberbac/internal/globals"
 )
+
+// CheckMetaSelector checks if the metaSelector has only one field filled
+func (r *DynamicRoleBindingReconciler) CheckMetaSelector(ctx context.Context, metaSelector *kuberbacv1alpha1.MetaSelectorT) (err error) {
+
+	// Check just only field is filled
+	filledSelectorFields := 0
+
+	if len(metaSelector.MatchLabels) > 0 {
+		filledSelectorFields++
+	}
+
+	if len(metaSelector.MatchAnnotations) > 0 {
+		filledSelectorFields++
+	}
+
+	if filledSelectorFields != 1 {
+		err = fmt.Errorf("only one of the following fields is allowed as metaSelector: matchLabels, matchAnnotations")
+	}
+
+	return err
+}
 
 // CheckNameSelector checks if the nameSelector has only one field filled
 func (r *DynamicRoleBindingReconciler) CheckNameSelector(ctx context.Context, nameSelector *kuberbacv1alpha1.NameSelectorT) (err error) {
@@ -142,13 +164,20 @@ func (r *DynamicRoleBindingReconciler) GetServiceAccountsBySelectors(ctx context
 		return result, err
 	}
 
-	// Check nameSelector and labelSelector are NOT filled together
+	// Check nameSelector and metaSelector are NOT filled together
 	if !reflect.ValueOf(subject.NameSelector).IsZero() && !reflect.ValueOf(subject.MetaSelector).IsZero() {
 		err = fmt.Errorf("nameSelector and labelSelector are mutually exclusive")
 		return result, err
 	}
 
-	// Check just only nameSelector is used at once when filled
+	// Check only one metaSelector is used at once when filled
+	if !reflect.ValueOf(subject.MetaSelector).IsZero() {
+		if err = r.CheckMetaSelector(ctx, &subject.MetaSelector); err != nil {
+			return result, err
+		}
+	}
+
+	// Check only one nameSelector is used at once when filled
 	if !reflect.ValueOf(subject.NameSelector).IsZero() {
 		if err = r.CheckNameSelector(ctx, &subject.NameSelector); err != nil {
 			return result, err
@@ -172,9 +201,17 @@ func (r *DynamicRoleBindingReconciler) GetServiceAccountsBySelectors(ctx context
 			continue
 		}
 
-		// Matching by labels is preferred
+		// Matching by labels
 		if !reflect.ValueOf(subject.MetaSelector.MatchLabels).IsZero() {
 			if globals.IsSubset(subject.MetaSelector.MatchLabels, serviceAccount.Labels) {
+				result.Items = append(result.Items, serviceAccount)
+			}
+			continue
+		}
+
+		// Matching by annotations
+		if !reflect.ValueOf(subject.MetaSelector.MatchAnnotations).IsZero() {
+			if globals.IsSubset(subject.MetaSelector.MatchAnnotations, serviceAccount.Annotations) {
 				result.Items = append(result.Items, serviceAccount)
 			}
 			continue
@@ -233,11 +270,6 @@ func (r *DynamicRoleBindingReconciler) SyncTarget(ctx context.Context, resource 
 
 	//
 	subjectFilteredNamespaces, err := r.FilterNamespaceListBySelector(ctx, namespaceList, &resource.Spec.Source.Subject.NamespaceSelector)
-	if err != nil {
-		return err
-	}
-
-	targetFilteredNamespaces, err := r.FilterNamespaceListBySelector(ctx, namespaceList, &resource.Spec.Targets.NamespaceSelector)
 	if err != nil {
 		return err
 	}
@@ -303,7 +335,9 @@ func (r *DynamicRoleBindingReconciler) SyncTarget(ctx context.Context, resource 
 	}
 	maps.Copy(resource.Spec.Targets.Annotations, referenceAnnotations)
 
-	roleBindingResource := rbacv1.RoleBinding{
+	// Time to create the role binding resource. It can be ClusterRoleBinding or RoleBinding
+	// depending on the user's choice, so we assume ClusterRoleBinding
+	clusterRoleBindingResource := rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        resource.Spec.Targets.Name,
 			Labels:      resource.Spec.Targets.Labels,
@@ -317,9 +351,45 @@ func (r *DynamicRoleBindingReconciler) SyncTarget(ctx context.Context, resource 
 		Subjects: expandedSubjects,
 	}
 
+	// Generate or update the ClusterRoleBinding resource
+	if resource.Spec.Targets.ClusterScoped {
+
+		tmpClusterRoleBindingResource := rbacv1.ClusterRoleBinding{}
+		err = r.Get(ctx, client.ObjectKey{
+			Namespace: "",
+			Name:      resource.Spec.Targets.Name,
+		}, &tmpClusterRoleBindingResource)
+
+		if err != nil {
+			log.Printf("error getting ClusterRoleBinding: %s", err.Error())
+			return err
+		}
+
+		// Review reference annotations when the resource already exists
+		if !reflect.ValueOf(tmpClusterRoleBindingResource).IsZero() &&
+			!globals.IsSubset(referenceAnnotations, tmpClusterRoleBindingResource.Annotations) {
+			return err
+		}
+
+		err = r.Client.Update(ctx, clusterRoleBindingResource.DeepCopy())
+		if err != nil {
+			log.Printf("error updating ClusterRoleBinding: %s", err.Error())
+		}
+		return err
+	}
+
+	// From here, we failed in our ClusterRoleBinding assumption.
+	// Generate or update RoleBinding resources.
+	roleBindingResource := rbacv1.RoleBinding(clusterRoleBindingResource)
+
 	// Get Rolebindings
 	existentRoleBindingList := rbacv1.RoleBindingList{}
 	err = r.Client.List(ctx, &existentRoleBindingList)
+	if err != nil {
+		return err
+	}
+
+	targetFilteredNamespaces, err := r.FilterNamespaceListBySelector(ctx, namespaceList, &resource.Spec.Targets.NamespaceSelector)
 	if err != nil {
 		return err
 	}
