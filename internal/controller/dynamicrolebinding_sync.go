@@ -274,11 +274,6 @@ func (r *DynamicRoleBindingReconciler) SyncTarget(ctx context.Context, resource 
 		return err
 	}
 
-	targetFilteredNamespaces, err := r.FilterNamespaceListBySelector(ctx, namespaceList, &resource.Spec.Targets.NamespaceSelector)
-	if err != nil {
-		return err
-	}
-
 	// Create as many subjects as needed
 	expandedSubjects := []rbacv1.Subject{}
 
@@ -390,6 +385,11 @@ func (r *DynamicRoleBindingReconciler) SyncTarget(ctx context.Context, resource 
 	// Get Rolebindings
 	existentRoleBindingList := rbacv1.RoleBindingList{}
 	err = r.Client.List(ctx, &existentRoleBindingList)
+	if err != nil {
+		return err
+	}
+
+	targetFilteredNamespaces, err := r.FilterNamespaceListBySelector(ctx, namespaceList, &resource.Spec.Targets.NamespaceSelector)
 	if err != nil {
 		return err
 	}
