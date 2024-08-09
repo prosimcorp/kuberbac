@@ -360,6 +360,7 @@ func (r *DynamicRoleBindingReconciler) SyncTarget(ctx context.Context, resource 
 			Name:      resource.Spec.Targets.Name,
 		}, &tmpClusterRoleBindingResource)
 
+		err = client.IgnoreNotFound(err)
 		if err != nil {
 			log.Printf("error getting ClusterRoleBinding: %s", err.Error())
 			return err
