@@ -76,9 +76,17 @@ func (r *DynamicRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	// 3. Check if the DynamicClusterRole instance is marked to be deleted: indicated by the deletion timestamp being set
 	if !dynamicRoleBindingResource.DeletionTimestamp.IsZero() {
-		if controllerutil.ContainsFinalizer(dynamicRoleBindingResource, patchFinalizer) {
-			// Remove the finalizers on Patch CR
-			controllerutil.RemoveFinalizer(dynamicRoleBindingResource, patchFinalizer)
+		if controllerutil.ContainsFinalizer(dynamicRoleBindingResource, resourceFinalizer) {
+
+			// Delete all created targets
+			err = r.DeleteTargets(ctx, dynamicRoleBindingResource)
+			if err != nil {
+				logger.Info(fmt.Sprintf(resourceTargetsDeleteError, DynamicRoleBindingResourceType, req.NamespacedName, err.Error()))
+				return result, err
+			}
+
+			// Remove the finalizers on CR
+			controllerutil.RemoveFinalizer(dynamicRoleBindingResource, resourceFinalizer)
 			err = r.Update(ctx, dynamicRoleBindingResource)
 			if err != nil {
 				logger.Info(fmt.Sprintf(resourceFinalizersUpdateError, DynamicRoleBindingResourceType, req.NamespacedName, err.Error()))
@@ -90,8 +98,8 @@ func (r *DynamicRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	// 4. Add finalizer to the DynamicClusterRole CR
-	if !controllerutil.ContainsFinalizer(dynamicRoleBindingResource, patchFinalizer) {
-		controllerutil.AddFinalizer(dynamicRoleBindingResource, patchFinalizer)
+	if !controllerutil.ContainsFinalizer(dynamicRoleBindingResource, resourceFinalizer) {
+		controllerutil.AddFinalizer(dynamicRoleBindingResource, resourceFinalizer)
 		err = r.Update(ctx, dynamicRoleBindingResource)
 		if err != nil {
 			return result, err

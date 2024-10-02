@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"reflect"
@@ -455,4 +456,55 @@ func (r *DynamicRoleBindingReconciler) SyncTarget(ctx context.Context, resource 
 	}
 
 	return err
+}
+
+// DeleteTargets deletes all the RoleBindings and ClusterRoleBindings that are owned by the DynamicRoleBinding resource
+func (r *DynamicRoleBindingReconciler) DeleteTargets(ctx context.Context, resource *kuberbacv1alpha1.DynamicRoleBinding) (err error) {
+
+	var allErrors []error
+
+	// Create a generic RoleBinding structure
+	referenceAnnotations := map[string]string{
+		"kuberbac.prosimcorp.com/owner-apiversion": resource.APIVersion,
+		"kuberbac.prosimcorp.com/owner-kind":       resource.Kind,
+		"kuberbac.prosimcorp.com/owner-name":       resource.ObjectMeta.Name,
+		"kuberbac.prosimcorp.com/owner-namespace":  resource.ObjectMeta.Namespace,
+	}
+
+	// Get ClusterRolebindings objects and delete those with reference annotations
+	clusterRoleBindingList := rbacv1.ClusterRoleBindingList{}
+	err = r.Client.List(ctx, &clusterRoleBindingList)
+	if err != nil {
+		return err
+	}
+
+	for _, clusterRoleBinding := range clusterRoleBindingList.Items {
+
+		if globals.IsSubset(referenceAnnotations, clusterRoleBinding.Annotations) {
+			err = r.Client.Delete(ctx, &clusterRoleBinding)
+			if err = client.IgnoreNotFound(err); err != nil {
+				allErrors = append(allErrors, fmt.Errorf("error deleting ClusterRoleBinding: %s", err.Error()))
+			}
+		}
+	}
+
+	// Get Rolebindings objects and delete those with reference annotations
+	roleBindingList := rbacv1.RoleBindingList{}
+	err = r.Client.List(ctx, &roleBindingList)
+	if err != nil {
+		return err
+	}
+
+	for _, roleBinding := range roleBindingList.Items {
+
+		if globals.IsSubset(referenceAnnotations, roleBinding.Annotations) {
+			err = r.Client.Delete(ctx, &roleBinding)
+
+			if err = client.IgnoreNotFound(err); err != nil {
+				allErrors = append(allErrors, fmt.Errorf("error deleting RoleBinding: %s", err.Error()))
+			}
+		}
+	}
+
+	return errors.Join(allErrors...)
 }

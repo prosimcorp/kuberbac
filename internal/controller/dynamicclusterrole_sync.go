@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	kuberbacv1alpha1 "prosimcorp.com/kuberbac/api/v1alpha1"
+	"prosimcorp.com/kuberbac/internal/globals"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -654,4 +656,37 @@ func (r *DynamicClusterRoleReconciler) SyncTarget(ctx context.Context, resource 
 	}
 
 	return err
+}
+
+// DeleteTargets deletes all the ClusterRoles that are owned by the DynamicClusterRole resource
+func (r *DynamicClusterRoleReconciler) DeleteTargets(ctx context.Context, resource *kuberbacv1alpha1.DynamicClusterRole) (err error) {
+
+	var allErrors []error
+
+	// Create a generic ClusterRole structure
+	referenceAnnotations := map[string]string{
+		"kuberbac.prosimcorp.com/owner-apiversion": resource.APIVersion,
+		"kuberbac.prosimcorp.com/owner-kind":       resource.Kind,
+		"kuberbac.prosimcorp.com/owner-name":       resource.ObjectMeta.Name,
+		"kuberbac.prosimcorp.com/owner-namespace":  resource.ObjectMeta.Namespace,
+	}
+
+	// Get ClusterRole objects and delete those with reference annotations
+	clusterRoleList := rbacv1.ClusterRoleList{}
+	err = r.Client.List(ctx, &clusterRoleList)
+	if err != nil {
+		return err
+	}
+
+	for _, clusterRole := range clusterRoleList.Items {
+
+		if globals.IsSubset(referenceAnnotations, clusterRole.Annotations) {
+			err = r.Client.Delete(ctx, &clusterRole)
+			if err = client.IgnoreNotFound(err); err != nil {
+				allErrors = append(allErrors, fmt.Errorf("error deleting ClusterRoleBinding: %s", err.Error()))
+			}
+		}
+	}
+
+	return errors.Join(allErrors...)
 }
